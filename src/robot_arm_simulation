@@ -1,0 +1,128 @@
+#!/usr/bin/python
+'''
+Simulator of a 3R arm that draws a heart. The dexterity space is a circular ring with
+hollow inner circle (r = 0.01), and solid outer_circle(r = 2)
+The motion is composed of 2 parts: 1. linear motion from the heart starting position (set to (L1/2, 0))2. periodical motion for drawing the heart
+'''
+
+from inverse_kinematics_2d import ik_body
+import rospy
+from sensor_msgs.msg import JointState
+import numpy as np
+
+def angle_wrapped(theta):
+    theta = np.sign(theta)*(abs(theta)%(2.0*np.pi))
+    if abs(theta)>np.pi:
+        r = -1.0 if theta> 0 else 0
+        theta = r*np.pi + theta%np.pi
+    return theta
+
+class robot_arm(object):
+    def __init__(self):
+        self.T = rospy.get_param("/heart_drawing_arm/T")
+        self.dt = rospy.get_param("/heart_drawing_arm/dt")
+        self.L1 = rospy.get_param("/heart_drawing_arm/L1")
+        self.L2 = rospy.get_param("/heart_drawing_arm/L2")
+        self.L3 = rospy.get_param("/heart_drawing_arm/L3")
+
+        #linear motion params
+        self.T1 = rospy.get_param("/heart_drawing_arm/T1")
+        self.t1_list = np.linspace(0, 1.0, num=self.T1/self.dt)
+        self.linear_motion_status = True
+        self.linear_motion_iter_index = 0
+
+        self.t_list = np.linspace(0,2.0*np.pi, num = self.T/self.dt)
+        self.iter_index = 0
+
+        self.joint1_angle = np.pi/2.0
+        self.joint2_angle = -np.pi
+        self.joint3_angle = np.pi/2.0
+
+        self.joint_publisher = rospy.Publisher("joint_states", JointState, queue_size = 0)
+
+        # for i in range(1000):
+        while True:
+            x,y = self.get_desired_pos()
+            self.update_joint_angles(x,y)
+            self.publish()
+            rospy.sleep(self.dt)
+
+    def get_desired_pos(self):
+        '''
+        Returns the x, y coordinate of the next time instance.
+        '''
+        if self.linear_motion_status:
+            if self.linear_motion_iter_index == len(self.t1_list):
+                self.linear_motion_status = False
+                x = self.L1/2.0
+                y = 0.0
+            else:
+                t = self.t1_list[self.linear_motion_iter_index]
+                x = (1-t)*(self.L3) + t* self.L1/2.0
+                #x = (1-t)*(self.L1+self.L2+self.L3) + t* self.L1/2.0
+                y = 0.0
+                self.linear_motion_iter_index+=1
+
+        else:
+            if self.iter_index == len(self.t_list):
+                self.iter_index = 0
+
+            t = self.t_list[self.iter_index]
+            r = 1.5/15.0       #the scaling coefficient of the parametric equations of a heart
+            x = r*16.0*np.power(np.sin(t), 3)
+            y = r*( 13.0*np.cos(t) - 5.0*np.cos(2.0*t) - 2.0*np.cos(3.0*t) - np.cos(4.0*t) )
+
+            Rot = np.array([[0, 1.0],
+                            [-1.0, 0]])
+            [x,y] = Rot.dot(np.array([x,y]) )
+            self.iter_index+=1
+        return x,y
+
+    def update_joint_angles(self, x, y):
+        '''
+        Updates the three joint angles: joint1_angle, joint2_angle, joint3_angle
+        '''
+        Tsd = np.array([[1.0, 0.0, x],
+                        [0.0, 1.0, y],
+                        [0.0, 0.0, 1.0]])
+        M = np.array([[1.0, 0, self.L1+ self.L2 + self.L3],
+                      [0, 1.0, 0],
+                      [0, 0, 1.0]])
+        thetalist = np.array([self.joint1_angle, self.joint2_angle, self.joint3_angle])
+        blist = np.array([[1.0, 0, self.L1+self.L2+self.L3],
+                          [1.0, 0, self.L2+self.L3],
+                          [1.0, 0, self.L3]])
+        error_theta = 0.01
+        error_v = 0.001
+
+        #test
+        #print "get transformation: ", get_transformation_body(M, blist, thetalist)
+
+        thetalist_new ,success = ik_body(M, Tsd, thetalist, blist, error_theta, error_v)
+        if success:
+            #angle wrapping
+            for i in range(len(thetalist_new)):
+                thetalist_new[i] = angle_wrapped(thetalist_new[i])
+            self.joint1_angle = thetalist_new[0]
+            self.joint2_angle = thetalist_new[1]
+            self.joint3_angle = thetalist_new[2]
+
+        #test        x = np.sign(x)*(abs(x)%np.pi)
+        print "x,y: ",x,y, "| joint_angle: ", thetalist_new, "| success: ", success
+
+
+    def publish(self):
+        joint_msg = JointState()
+        joint_msg.header.stamp = rospy.Time.now()
+        joint_msg.name = ['base_link_upper_arm', 'upper_arm_lower_arm', "lower_arm_gripper_arm"]
+        joint_msg.position = [self.joint1_angle,self.joint2_angle,self.joint3_angle]
+        self.joint_publisher.publish(joint_msg)
+
+if __name__ == "__main__":
+    try:
+        rospy.init_node("heart_drawing_arm")
+        robot_arm()
+        rospy.spin()
+    except rospy.ROSInterruptException:
+        pass
+
