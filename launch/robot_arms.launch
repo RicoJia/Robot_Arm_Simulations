@@ -2,8 +2,6 @@
   <!-- load the urdf into the parameter server -->
   <param name="robot_description" textfile="$(find robot_arm_simulation)/urdf/arms.urdf" />
 
-
-
   <!-- The robot_state_publisher reads the urdf from /robot_description parameter
        and listens to joint information on the /joint_states topic -->
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
@@ -22,7 +20,7 @@
   <!-- rviz will enable us to see the robot -->
   <arg name="rviz_launch" default="true"/>
 <!--  <group if="$(arg rviz_launch)" >-->
-    <node name="rviz" pkg="rviz" type="rviz" if="$(arg rviz_launch)" args="-d $(find robot_arm_simulation)/rviz/view_robot.rviz" />
+    <node name="rviz" pkg="rviz" type="rviz" if="$(arg rviz_launch)" args="-d $(find robot_arm_simulation)/rviz/view_robot.rviz" required="true"/>
 <!--  </group>-->
 
 </launch>
