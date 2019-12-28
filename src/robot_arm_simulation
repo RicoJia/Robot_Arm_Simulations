@@ -41,11 +41,12 @@ class robot_arm(object):
         self.joint_publisher = rospy.Publisher("joint_states", JointState, queue_size = 0)
 
         # for i in range(1000):
+        rate = rospy.Rate(1.0/self.dt)
         while True:
             x,y = self.get_desired_pos()
             self.update_joint_angles(x,y)
             self.publish()
-            rospy.sleep(self.dt)
+            rate.sleep()
 
     def get_desired_pos(self):
         '''

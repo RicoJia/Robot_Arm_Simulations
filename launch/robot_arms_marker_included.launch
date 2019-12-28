@@ -9,6 +9,6 @@
         <arg name="rviz_launch" value="$(arg rviz_launch)"/>
     </include>
 
-<!--    <node name="marker" pkg="robot_arm_simulation" type="marker" if="$(arg marker_status)"/>-->
+    <node name="marker" pkg="robot_arm_simulation" type="marker" if="$(arg marker_status)"/>
 
 </launch>

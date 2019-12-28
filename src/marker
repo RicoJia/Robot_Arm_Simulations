@@ -31,7 +31,7 @@ class marker_line_strip(object):
         self.marker.color.b = 180.0/255.0
         self.marker.color.a = 1.0
 
-        self.marker.lifetime = rospy.Duration.from_sec(rospy.get_param("/heart_drawing_arm/T")/0.75)
+        self.marker.lifetime = rospy.Duration.from_sec(rospy.get_param("/heart_drawing_arm/T")*0.95)
         self.main_loop()
 
     def main_loop(self):
@@ -43,7 +43,7 @@ class marker_line_strip(object):
         i = 0.0
         current_point = Point()
         previous_point = Point()
-        while True:
+        while not rospy.is_shutdown():
             (trans,rot) = listener.lookupTransform( '/base_link','/end_effector', rospy.Time(0))
             current_point.x = trans[0]
             current_point.y = trans[1]
