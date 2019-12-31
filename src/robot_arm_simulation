@@ -2,7 +2,7 @@
 '''
 Simulator of a 3R arm that draws a heart. The dexterity space is a circular ring with
 hollow inner circle (r = 0.01), and solid outer_circle(r = 2)
-The motion is composed of 2 parts: 1. linear motion from the heart starting position (set to (L1/2, 0))2. periodical motion for drawing the heart
+The starting position of the motions is set to (L1/2, 0)), then the arm will carrt out periodical motion along the intended trajectory.
 '''
 
 from inverse_kinematics_2d import ik_body
@@ -17,6 +17,30 @@ def angle_wrapped(theta):
         theta = r*np.pi + theta%np.pi
     return theta
 
+def get_scaling_coefficient(x_list, y_list, outer_radius, inner_radius):
+    '''
+    Purpose: scale the input trajectory functions so the trajectory can be fit inside the workspace of the robot.
+    To ensure safety, the effective workspace is shrunk to 0.8 of its original size. If the trajectory contains points that lie inside and outside the
+    robot's workspace, then the trajectory is not achievable.
+    Inputs: 1. X, and y at all time instances along a trajectory 2. The outer and inner radii of the workspace of the robot
+    Output: scaling coefficient. Example usage: x = r*original_x, y = r*original_y
+    '''
+    max_len = outer_radius
+    min_len = inner_radius
+    for i in range(len(x_list)):
+        d = np.linalg.norm([ [x_list[i], y_list[i]] ])
+        if d>max_len:
+            max_len = d
+        elif d<min_len:
+            min_len = d
+    if max_len > outer_radius and min_len < inner_radius:
+        r = 0
+        rospy.signal_shutdown("Target trajectory is unachievable as it contains points that lie inside and outside the robot's workspace")
+    else:
+        r = 0.8*(outer_radius - inner_radius)/(max_len - min_len)
+    return r
+
+
 class robot_arm(object):
     def __init__(self):
         self.T = rospy.get_param("/heart_drawing_arm/T")
@@ -25,22 +49,25 @@ class robot_arm(object):
         self.L2 = rospy.get_param("/heart_drawing_arm/L2")
         self.L3 = rospy.get_param("/heart_drawing_arm/L3")
 
-        #linear motion params
-        self.T1 = rospy.get_param("/heart_drawing_arm/T1")
-        self.t1_list = np.linspace(0, 1.0, num=self.T1/self.dt)
-        self.linear_motion_status = True
-        self.linear_motion_iter_index = 0
+        #Definition of the trajectory
+        #a straight line
+        # self.TRAJECTORY_X = np.linspace(0, 2.0, num =  self.T/self.dt)
+        # self.TRAJECTORY_Y = np.ones(len(self.TRAJECTORY_X))
+        #a heart
+        t_list = np.linspace(0,2.0*np.pi, num = self.T/self.dt)
+        self.TRAJECTORY_X = 16.0*np.power(np.sin(t_list), 3)
+        self.TRAJECTORY_Y = ( 13.0*np.cos(t_list) - 5.0*np.cos(2.0*t_list) - 2.0*np.cos(3.0*t_list) - np.cos(4.0*t_list) )
 
-        self.t_list = np.linspace(0,2.0*np.pi, num = self.T/self.dt)
+        outer_radius = self.L1+self.L2-self.L3
+        inner_radius = self.L3
+        self.r = get_scaling_coefficient(self.TRAJECTORY_X, self.TRAJECTORY_Y, outer_radius, inner_radius)
         self.iter_index = 0
 
         self.joint1_angle = np.pi/2.0
         self.joint2_angle = -np.pi
         self.joint3_angle = np.pi/2.0
-
         self.joint_publisher = rospy.Publisher("joint_states", JointState, queue_size = 0)
 
-        # for i in range(1000):
         rate = rospy.Rate(1.0/self.dt)
         while True:
             x,y = self.get_desired_pos()
@@ -49,34 +76,17 @@ class robot_arm(object):
             rate.sleep()
 
     def get_desired_pos(self):
-        '''
-        Returns the x, y coordinate of the next time instance.
-        '''
-        if self.linear_motion_status:
-            if self.linear_motion_iter_index == len(self.t1_list):
-                self.linear_motion_status = False
-                x = self.L1/2.0
-                y = 0.0
-            else:
-                t = self.t1_list[self.linear_motion_iter_index]
-                x = (1-t)*(self.L3) + t* self.L1/2.0
-                #x = (1-t)*(self.L1+self.L2+self.L3) + t* self.L1/2.0
-                y = 0.0
-                self.linear_motion_iter_index+=1
 
-        else:
-            if self.iter_index == len(self.t_list):
-                self.iter_index = 0
+        if self.iter_index == len(self.TRAJECTORY_X):
+            self.iter_index = 0
 
-            t = self.t_list[self.iter_index]
-            r = 1.5/15.0       #the scaling coefficient of the parametric equations of a heart
-            x = r*16.0*np.power(np.sin(t), 3)
-            y = r*( 13.0*np.cos(t) - 5.0*np.cos(2.0*t) - 2.0*np.cos(3.0*t) - np.cos(4.0*t) )
+        x = self.r*self.TRAJECTORY_X[self.iter_index]
+        y = self.r*self.TRAJECTORY_Y[self.iter_index]
 
-            Rot = np.array([[0, 1.0],
-                            [-1.0, 0]])
-            [x,y] = Rot.dot(np.array([x,y]) )
-            self.iter_index+=1
+        Rot = np.array([[0, 1.0],
+                        [-1.0, 0]])
+        [x,y] = Rot.dot(np.array([x,y]) )
+        self.iter_index+=1
         return x,y
 
     def update_joint_angles(self, x, y):
@@ -96,9 +106,6 @@ class robot_arm(object):
         error_theta = 0.01
         error_v = 0.001
 
-        #test
-        #print "get transformation: ", get_transformation_body(M, blist, thetalist)
-
         thetalist_new ,success = ik_body(M, Tsd, thetalist, blist, error_theta, error_v)
         if success:
             #angle wrapping
@@ -108,7 +115,6 @@ class robot_arm(object):
             self.joint2_angle = thetalist_new[1]
             self.joint3_angle = thetalist_new[2]
 
-        #test        x = np.sign(x)*(abs(x)%np.pi)
         print "x,y: ",x,y, "| joint_angle: ", thetalist_new, "| success: ", success
 
 

@@ -1,6 +1,7 @@
 <launch>
   <!-- load the urdf into the parameter server -->
-  <param name="robot_description" textfile="$(find robot_arm_simulation)/urdf/arms.urdf" />
+<!--  <param name="robot_description" textfile="$(find robot_arm_simulation)/urdf/arms.urdf" />-->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder '$(find robot_arm_simulation)/urdf/arms.xacro'"/>
 
   <!-- The robot_state_publisher reads the urdf from /robot_description parameter
        and listens to joint information on the /joint_states topic -->
