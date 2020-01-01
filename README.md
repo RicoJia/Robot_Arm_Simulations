@@ -9,6 +9,7 @@ of a single continuous shape, please see section **Changing the Shape To Draw** 
 
 ![Screenshot from 2019-12-30 21-18-44](https://user-images.githubusercontent.com/39393023/71608911-0c2be900-2b4a-11ea-8b23-0e264bd6ae2c.png)
 
+
 **The workspace of the robot**
 ![Screenshot from 2019-12-30 16-21-04](https://user-images.githubusercontent.com/39393023/71603023-952e2a80-2b20-11ea-8494-e804d4c4b106.png)
 
