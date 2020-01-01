@@ -10,6 +10,13 @@ import rospy
 from sensor_msgs.msg import JointState
 import numpy as np
 
+#Definition of the trajectory
+T = rospy.get_param("/heart_drawing_arm/T")
+dt = rospy.get_param("/heart_drawing_arm/dt")
+t_list = np.linspace(0,2.0*np.pi, num = T/dt)
+TRAJECTORY_X = 16.0*np.power(np.sin(t_list), 3)
+TRAJECTORY_Y = ( 13.0*np.cos(t_list) - 5.0*np.cos(2.0*t_list) - 2.0*np.cos(3.0*t_list) - np.cos(4.0*t_list) )
+
 def angle_wrapped(theta):
     theta = np.sign(theta)*(abs(theta)%(2.0*np.pi))
     if abs(theta)>np.pi:
@@ -43,24 +50,14 @@ def get_scaling_coefficient(x_list, y_list, outer_radius, inner_radius):
 
 class robot_arm(object):
     def __init__(self):
-        self.T = rospy.get_param("/heart_drawing_arm/T")
-        self.dt = rospy.get_param("/heart_drawing_arm/dt")
+        global TRAJECTORY_X, TRAJECTORY_Y, dt
         self.L1 = rospy.get_param("/heart_drawing_arm/L1")
         self.L2 = rospy.get_param("/heart_drawing_arm/L2")
         self.L3 = rospy.get_param("/heart_drawing_arm/L3")
 
-        #Definition of the trajectory
-        #a straight line
-        # self.TRAJECTORY_X = np.linspace(0, 2.0, num =  self.T/self.dt)
-        # self.TRAJECTORY_Y = np.ones(len(self.TRAJECTORY_X))
-        #a heart
-        t_list = np.linspace(0,2.0*np.pi, num = self.T/self.dt)
-        self.TRAJECTORY_X = 16.0*np.power(np.sin(t_list), 3)
-        self.TRAJECTORY_Y = ( 13.0*np.cos(t_list) - 5.0*np.cos(2.0*t_list) - 2.0*np.cos(3.0*t_list) - np.cos(4.0*t_list) )
-
         outer_radius = self.L1+self.L2-self.L3
         inner_radius = self.L3
-        self.r = get_scaling_coefficient(self.TRAJECTORY_X, self.TRAJECTORY_Y, outer_radius, inner_radius)
+        self.r = get_scaling_coefficient(TRAJECTORY_X, TRAJECTORY_Y, outer_radius, inner_radius)
         self.iter_index = 0
 
         self.joint1_angle = np.pi/2.0
@@ -68,7 +65,7 @@ class robot_arm(object):
         self.joint3_angle = np.pi/2.0
         self.joint_publisher = rospy.Publisher("joint_states", JointState, queue_size = 0)
 
-        rate = rospy.Rate(1.0/self.dt)
+        rate = rospy.Rate(1.0/dt)
         while True:
             x,y = self.get_desired_pos()
             self.update_joint_angles(x,y)
@@ -77,11 +74,11 @@ class robot_arm(object):
 
     def get_desired_pos(self):
 
-        if self.iter_index == len(self.TRAJECTORY_X):
+        if self.iter_index == len(TRAJECTORY_X):
             self.iter_index = 0
 
-        x = self.r*self.TRAJECTORY_X[self.iter_index]
-        y = self.r*self.TRAJECTORY_Y[self.iter_index]
+        x = self.r*TRAJECTORY_X[self.iter_index]
+        y = self.r*TRAJECTORY_Y[self.iter_index]
 
         Rot = np.array([[0, 1.0],
                         [-1.0, 0]])
