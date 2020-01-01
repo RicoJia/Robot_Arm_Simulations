@@ -39,7 +39,6 @@ $ roslaunch robot_arm_simulation robot_arms_marker_included.launch
 
 For showing the robot's movement only, run
 ```
-'''
 $ roslaunch robot_arm_simulation robot_arms_marker_included.launch marker_status:=false
 ```
 
